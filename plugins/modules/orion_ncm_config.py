@@ -66,6 +66,16 @@ EXAMPLES = r'''
     method: import
   delegate_to: localhost
 
+- name: Import router configuration from file
+  jeisenbath.solarwinds.orion_ncm_config:
+    hostname: "{{ solarwinds_server }}"
+    username: "{{ solarwinds_user }}"
+    password: "{{ solarwinds_pass }}"
+    ip_address: "192.168.1.100"
+    config_content: "{{ lookup('file', '/path/to/device_config.txt') }}"
+    config_type: "Running"
+  delegate_to: localhost
+
 - name: Upload configuration to device via NCM
   jeisenbath.solarwinds.orion_ncm_config:
     hostname: "{{ solarwinds_server }}"
@@ -155,6 +165,54 @@ except Exception:
     raise Exception
 
 
+def get_config_history(orion, node, limit=5):
+    """
+    Get recent configuration history for a node from NCM.
+    
+    Args:
+        orion: OrionModule instance
+        node: Orion node object
+        limit: Maximum number of history entries to return (default: 5)
+        
+    Returns:
+        List of configuration history entries, or empty list if unavailable
+    """
+    config_history = []
+    try:
+        if hasattr(orion, 'get_ncm_config_history'):
+            config_history = orion.get_ncm_config_history(node, limit=limit)
+    except Exception:
+        # Config history is optional, continue without it
+        pass
+    return config_history
+
+
+def normalize_ncm_node_id(ncm_node_id):
+    """
+    Normalize NCM node ID to a proper GUID string format.
+    
+    Args:
+        ncm_node_id: The NCM node ID to normalize
+        
+    Returns:
+        str: Normalized GUID string
+        
+    Raises:
+        Exception: If the node ID format is invalid
+    """
+    import uuid
+    
+    if isinstance(ncm_node_id, str):
+        try:
+            # Validate and normalize the GUID
+            guid_obj = uuid.UUID(ncm_node_id)
+            return str(guid_obj)
+        except ValueError:
+            raise Exception(f"Invalid NCM NodeID format: {ncm_node_id}")
+    else:
+        return str(ncm_node_id)
+
+
 def main():
     # start with generic Orion arguments
     argument_spec = orion_argument_spec()
@@ -223,20 +281,8 @@ def main():
         if method == 'import':
             # Import configuration to NCM archive using ImportConfig verb
             try:
-                # Use the exact format from working Python example
-                # Parameters: ncm_node_id, config_type, config_text, title, comments
-                import uuid
-                
-                # Ensure NCM NodeID is a proper GUID string
-                if isinstance(ncm_node_id, str):
-                    try:
-                        # Validate and normalize the GUID
-                        guid_obj = uuid.UUID(ncm_node_id)
-                        normalized_node_id = str(guid_obj)
-                    except ValueError:
-                        raise Exception(f"Invalid NCM NodeID format: {ncm_node_id}")
-                else:
-                    normalized_node_id = str(ncm_node_id)
+                # Normalize NCM NodeID to proper GUID format
+                normalized_node_id = normalize_ncm_node_id(ncm_node_id)
                 
                 # Prepare parameters exactly like the working Python example
                 config_type_str = str(config_type) if config_type else "Running"
@@ -266,8 +312,7 @@ def main():
                     }
                 }
                 
-                # Get recent configuration history
-                config_history = orion.get_ncm_config_history(node, limit=5)
+                config_history = get_config_history(orion, node, limit=5)
                 
                 module.exit_json(
                     changed=True,
@@ -291,18 +336,8 @@ def main():
         elif method == 'upload':
             # Upload configuration to device via NCM
             try:
-                import uuid
-                
-                # Ensure NCM NodeID is a proper GUID string
-                if isinstance(ncm_node_id, str):
-                    try:
-                        # Validate and normalize the GUID
-                        guid_obj = uuid.UUID(ncm_node_id)
-                        normalized_node_id = str(guid_obj)
-                    except ValueError:
-                        raise Exception(f"Invalid NCM NodeID format: {ncm_node_id}")
-                else:
-                    normalized_node_id = str(ncm_node_id)
+                # Normalize NCM NodeID to proper GUID format
+                normalized_node_id = normalize_ncm_node_id(ncm_node_id)
                 
                 # Prepare parameters for UploadConfig
                 config_type_str = str(config_type) if config_type else "Running"
@@ -351,18 +386,7 @@ def main():
         elif method == 'download':
             # Download configuration from device via NCM
             try:
-                import uuid
-                
-                # Ensure NCM NodeID is a proper GUID string
-                if isinstance(ncm_node_id, str):
-                    try:
-                        # Validate and normalize the GUID
-                        guid_obj = uuid.UUID(ncm_node_id)
-                        normalized_node_id = str(guid_obj)
-                    except ValueError:
-                        raise Exception(f"Invalid NCM NodeID format: {ncm_node_id}")
-                else:
-                    normalized_node_id = str(ncm_node_id)
+                normalized_node_id = normalize_ncm_node_id(ncm_node_id)
                 
                 # Prepare config type (default to Running if not specified)
                 config_type_str = str(config_type) if config_type else "Running"
@@ -384,8 +408,7 @@ def main():
                     }
                 }
                 
-                # Get recent configuration history to see the newly downloaded config
-                config_history = orion.get_ncm_config_history(node, limit=5)
+                config_history = get_config_history(orion, node, limit=5)
                 
                 module.exit_json(
                     changed=True,
