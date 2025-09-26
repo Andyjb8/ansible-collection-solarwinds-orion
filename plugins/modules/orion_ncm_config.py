@@ -16,7 +16,7 @@ description:
     - Supports importing configurations, uploading to devices, and downloading from devices.
     - The target node must already exist in SolarWinds Orion and be managed by NCM.
     - Uses NCM APIs (ImportConfig, UploadConfig, DownloadConfig) for configuration management.
-version_added: "1.4.0"
+version_added: "3.2.0"
 author: "Andrew Bailey (@Andyjb8)"
 options:
     config_content:
