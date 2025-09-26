@@ -14,6 +14,7 @@ Collection for managing Nodes in Solarwinds Orion.
 | jeisenbath.solarwinds.orion_node                  | Creates, Removes, Manage, or Mute Node.              |
 | jeisenbath.solarwinds.orion_node_application      | Manages APM application templates assigned to Nodes. |
 | jeisenbath.solarwinds.orion_node_custom_poller    | Creates/Removes custom pollers on a Node.            |
+| jeisenbath.solarwinds.orion_ncm_config            | Manages configurations in NCM.                       |
 | jeisenbath.solarwinds.orion_node_hardware_health  | Creates/Removes Hardware Health poller on a Node.    |
 | jeisenbath.solarwinds.orion_node_info             | Gets info about a Node.                              |
 | jeisenbath.solarwinds.orion_node_interface        | Manage interfaces on Nodes.                          |
