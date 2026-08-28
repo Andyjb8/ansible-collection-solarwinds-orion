@@ -1,0 +1,60 @@
+---
+# A credential set name can repeat across credential types, so the module must match
+# on name AND type. Create a WMI set sharing the SNMPv3 set's name, then confirm both
+# types stay idempotent and each resolves to its own set. Reuses the snmpv3 test vars
+# so no new integration_config values are needed; the WMI password value is never
+# validated against anything.
+- name: Create WMI Credential Set sharing the SNMPv3 set name (check)
+  jeisenbath.solarwinds.orion_credential_set: &create_wmi_credential
+    hostname: "{{ orion_test_solarwinds_server }}"
+    username: "{{ orion_test_solarwinds_username }}"
+    password: "{{ orion_test_solarwinds_password }}"
+    state: present
+    type: wmi
+    credential_name: "{{ orion_test_node_snmpv3_credential_set }}"
+    wmi:
+      username: "{{ orion_test_node_snmpv3_username }}"
+      password: "{{ orion_test_node_snmpv3_auth_key }}"
+  delegate_to: localhost
+  check_mode: true
+  register: create_wmi_01
+
+- name: Create WMI Credential Set sharing the SNMPv3 set name
+  jeisenbath.solarwinds.orion_credential_set:
+    <<: *create_wmi_credential
+  delegate_to: localhost
+  register: create_wmi_02
+
+- name: Create WMI Credential Set sharing the SNMPv3 set name (idempotence)
+  jeisenbath.solarwinds.orion_credential_set:
+    <<: *create_wmi_credential
+  delegate_to: localhost
+  register: create_wmi_03
+
+- name: Look up SNMPv3 Credential Set with the same-name WMI set present
+  jeisenbath.solarwinds.orion_credential_set:
+    hostname: "{{ orion_test_solarwinds_server }}"
+    username: "{{ orion_test_solarwinds_username }}"
+    password: "{{ orion_test_solarwinds_password }}"
+    state: present
+    type: snmpv3
+    credential_name: "{{ orion_test_node_snmpv3_credential_set }}"
+    snmpv3:
+      username: "{{ orion_test_node_snmpv3_username }}"
+      auth_key: "{{ orion_test_node_snmpv3_auth_key }}"
+      priv_key: "{{ orion_test_node_snmpv3_priv_key }}"
+  delegate_to: localhost
+  register: lookup_snmpv3_same_name
+
+- name: Same-name asserts
+  ansible.builtin.assert:
+    that:
+      - create_wmi_01.changed
+      - create_wmi_02.changed
+      - create_wmi_02.credential is defined
+      - not create_wmi_03.changed
+      - not lookup_snmpv3_same_name.changed
+      - lookup_snmpv3_same_name.credential.ID != create_wmi_03.credential.ID
+      - "'SnmpCredentialsV3' in lookup_snmpv3_same_name.credential.CredentialType"
+      - "'UsernamePasswordCredential' in create_wmi_03.credential.CredentialType"
+...

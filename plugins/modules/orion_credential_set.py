@@ -15,6 +15,11 @@ description:
     - Currently the SWIS API does not support removing credential sets.
     - Also can validate and assign credentials to a node.
     - Credentials sets must be created before assigned.
+    - A credential set name does not reliably identify one credential set - names can
+      repeat across credential types, and Orion's duplicate-name check on create is not
+      atomic. The module therefore looks up I(credential_name) among sets of the requested
+      I(type) only, and fails when more than one set of that type matches instead of
+      operating on an arbitrary one of them.
 version_added: "3.1.0"
 author: "Josh M. Eisenbath (@jeisenbath)"
 options:
@@ -181,6 +186,7 @@ orion_node:
 from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.jeisenbath.solarwinds.plugins.module_utils.orion import OrionModule, orion_argument_spec
 from ansible_collections.jeisenbath.solarwinds.plugins.module_utils.credential import (
+    DuplicateCredentialError,
     get_credentials,
     create_snmpv3_credentials,
     create_username_password_credentials,
@@ -233,7 +239,10 @@ def main():
 
     orion = OrionModule(module)
 
-    credential_set = get_credentials(orion, module.params['credential_name'])
+    try:
+        credential_set = get_credentials(orion, module.params['credential_name'], module.params['type'])
+    except DuplicateCredentialError as OrionException:
+        module.fail_json(msg='Failed to look up Credential Set: {0}'.format(OrionException))
 
     if module.params['state'] == 'assigned':
         node = orion.get_node()
@@ -246,9 +255,15 @@ def main():
             if not credential_set:
                 if not module.check_mode:
                     if module.params['type'] == 'snmpv3':
-                        credential_set = create_snmpv3_credentials(orion, module.params['credential_name'], module.params['snmpv3'])
+                        credential_set = create_snmpv3_credentials(
+                            orion, module.params['credential_name'], module.params['snmpv3'],
+                            owner=module.params['snmpv3']['owner']
+                        )
                     elif module.params['type'] == 'wmi':
-                        credential_set = create_username_password_credentials(orion, module.params['credential_name'], module.params['wmi'])
+                        credential_set = create_username_password_credentials(
+                            orion, module.params['credential_name'], module.params['wmi'],
+                            module.params['wmi']['owner']
+                        )
                 changed = True
         except Exception as OrionException:
             module.fail_json(msg='Failed to create Credential Set: {0}'.format(OrionException))

@@ -4,5 +4,6 @@
   ansible.builtin.include_tasks: "{{ item }}"
   loop:
     - snmpv3.yml
+    - wmi_same_name.yml
     - assign.yml
 ...

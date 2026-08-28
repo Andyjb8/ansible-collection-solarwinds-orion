@@ -5,19 +5,65 @@
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
+# Orion.Credential.CredentialType markers for the credential set types this
+# collection manages. Matched as a substring because the full type name is
+# namespaced differently depending on which Orion component wrote the row
+# (e.g. SolarWinds.Orion.Core.Models.Credentials.SnmpCredentialsV3 alongside
+# SolarWinds.Orion.Core.SharedCredentials.Credentials.UsernamePasswordCredential).
+CREDENTIAL_TYPE_MARKERS = {
+    'snmpv3': 'SnmpCredentialsV3',
+    'wmi': 'UsernamePasswordCredential',
+}
 
-def get_credentials(orion, name):
+
+class DuplicateCredentialError(Exception):
+    """Raised when a credential set name does not identify exactly one set."""
+
+
+def get_credentials(orion, name, credential_type=None):
+    """Look up a credential set by name and (when given) credential type.
+
+    A credential set name alone does not identify a single set: names may
+    legitimately repeat across credential types, and Orion's duplicate-name
+    check on create is not atomic, so concurrent creates of the same name can
+    each create a set of the same type. Returning an arbitrary match is unsafe
+    - the caller can bind a node to one set while updating another, and the
+    match returned can differ between calls, since the query carries no
+    ordering. Matches of a different credential_type are therefore ignored,
+    and more than one match of the requested type is raised as
+    DuplicateCredentialError rather than guessed at.
+    """
     credential = {}
     query = f"""
     SELECT ID, Name, CredentialType
     FROM Orion.Credential
     WHERE Name = '{name}'
     """
-    results = orion.swis.query(query)
-    if results['results']:
-        credential['ID'] = results['results'][0]['ID']
-        credential['Name'] = results['results'][0]['Name']
-        credential['CredentialType'] = results['results'][0]['CredentialType']
+    matches = orion.swis.query(query)['results']
+
+    marker = CREDENTIAL_TYPE_MARKERS.get(credential_type)
+    if marker:
+        matches = [m for m in matches if marker in (m['CredentialType'] or '')]
+
+    if len(matches) > 1:
+        raise DuplicateCredentialError(
+            "Credential set name '{0}' matches {1} credential sets of the same type ({2}), "
+            "so the set to use is ambiguous - refusing to guess. Orion's duplicate-name "
+            "check on create is not atomic, so concurrent runs against the same credential "
+            "set name can each create one. Remove the unwanted sets (Settings > Manage "
+            "Credentials) and re-run.".format(
+                name,
+                len(matches),
+                ', '.join(
+                    'ID {0} type {1}'.format(m['ID'], m['CredentialType']) for m in matches
+                ),
+            )
+        )
+
+    if matches:
+        credential['ID'] = matches[0]['ID']
+        credential['Name'] = matches[0]['Name']
+        credential['CredentialType'] = matches[0]['CredentialType']
     return credential
 
 
